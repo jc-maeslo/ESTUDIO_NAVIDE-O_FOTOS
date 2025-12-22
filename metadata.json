@@ -1,0 +1,7 @@
+{
+  "name": "Navidad Mágica - Editor Fotográfico IA",
+  "description": "Una aplicación avanzada para fotógrafos profesionales que utiliza Gemini 2.5 Flash Image para transformar fotos familiares en composiciones navideñas cinematográficas, manteniendo la esencia de los rostros y mejorando cada detalle técnico.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
