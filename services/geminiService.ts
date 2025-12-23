@@ -1,51 +1,92 @@
 
-import { GoogleGenAI } from "@google/genai";
-import { ImageData, RefinementOptions } from "../types";
+import { GoogleGenAI, Type } from "@google/genai";
+import { ImageData, DynamicVariable } from "../types";
 
-export const generateChristmasPhoto = async (
-  referenceImages: ImageData[],
-  options: RefinementOptions
-): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+// Helper to get Gemini instance
+const getAi = () => new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+
+/**
+ * Analyzes uploaded images to suggest relevant professional refinement variables.
+ */
+export const analyzeScene = async (images: ImageData[]): Promise<DynamicVariable[]> => {
+  const ai = getAi();
   
-  // Build dynamic instructions based on professional variables
-  const directives: string[] = [];
+  const prompt = `
+    Analyze these images like a professional photo editor. 
+    Identify key subjects, lighting issues, costume flaws, or background elements that could be improved.
+    Suggest 5-6 specific "Refinement Variables" for a high-end photo regeneration.
+    Each variable must be technical and precise.
+    
+    Return the response as a JSON array of objects with the following structure:
+    { "label": "Short name", "description": "Technical instruction for the editor" }
+  `;
 
-  if (options.preservePhysiology) {
-    directives.push("- CRITICAL: Maintain exact facial features and physiology of the children. Do not add, remove, or modify any facial characteristics.");
-  }
+  const imageParts = images.map(img => ({
+    inlineData: {
+      data: img.base64.split(',')[1],
+      mimeType: img.mimeType
+    }
+  }));
 
-  if (options.lookAtCamera) {
-    directives.push("- Subjects must be looking directly at the camera lens with natural, warm expressions.");
-  }
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: { parts: [...imageParts, { text: prompt }] },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              label: { type: Type.STRING },
+              description: { type: Type.STRING }
+            },
+            required: ["label", "description"]
+          }
+        }
+      }
+    });
 
-  if (options.hideReindeerEars || options.uprightAntlers) {
-    let costumeText = "- COSTUME ADJUSTMENT: ";
-    if (options.hideReindeerEars) costumeText += "The floppy reindeer ears from the hood MUST NOT be visible. ";
-    if (options.uprightAntlers) costumeText += "The reindeer antlers/horns must be perfectly upright, rigid, and prominent.";
-    directives.push(costumeText);
+    const suggestions = JSON.parse(response.text || "[]");
+    return suggestions.map((s: any) => ({
+      id: Math.random().toString(36).substr(2, 9),
+      label: s.label,
+      description: s.description,
+      isActive: true,
+      isAiGenerated: true
+    }));
+  } catch (error) {
+    console.error("Analysis Error:", error);
+    return [];
   }
+};
 
-  if (options.removeDog) {
-    directives.push("- REMOVAL: Do not include the dog from the reference photos in the final composition.");
-  }
-
-  if (options.addToyTrain || options.snowyWindow) {
-    directives.push("- ENVIRONMENT: Set in a luxurious cozy living room with a white snowy Christmas tree.");
-    if (options.addToyTrain) directives.push("- Include a detailed vintage toy train set moving around the base of the tree.");
-    if (options.snowyWindow) directives.push("- Background features a large window with a view of a snowy pine forest at dusk.");
-  }
+/**
+ * Generates the final image based on dynamic variables.
+ */
+export const generateRefinedPhoto = async (
+  referenceImages: ImageData[],
+  variables: DynamicVariable[]
+): Promise<string> => {
+  const ai = getAi();
+  
+  const activeDirectives = variables
+    .filter(v => v.isActive)
+    .map(v => `- ${v.label.toUpperCase()}: ${v.description}`)
+    .join("\n    ");
 
   const prompt = `
-    Generate a professional high-end studio photography based on the provided reference images.
+    Act as a world-class professional photo studio.
+    Regenerate the provided scene using these specific technical refinements:
     
-    TECHNICAL DIRECTIVES:
-    ${directives.join("\n    ")}
+    ${activeDirectives}
     
-    STYLE:
-    - High Dynamic Range (HDR), cinematic lighting, professional color grading.
-    - Sharp focus on the children (one in Santa outfit, one in Reindeer hood).
-    - 8k resolution, commercial photography quality.
+    GLOBAL STANDARDS:
+    - Absolute preservation of facial identity and anatomy.
+    - High-end cinematic lighting (HDR).
+    - Sharp focus on main subjects, professional bokeh.
+    - Commercial grade 8k resolution aesthetics.
   `;
 
   const imageParts = referenceImages.map(img => ({
@@ -59,15 +100,10 @@ export const generateChristmasPhoto = async (
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: { 
-        parts: [
-          ...imageParts,
-          { text: prompt }
-        ] 
+        parts: [...imageParts, { text: prompt }] 
       },
       config: {
-        imageConfig: {
-          aspectRatio: "4:3"
-        }
+        imageConfig: { aspectRatio: "4:3" }
       }
     });
 
@@ -82,10 +118,10 @@ export const generateChristmasPhoto = async (
       }
     }
 
-    if (!imageUrl) throw new Error("No se pudo generar la imagen.");
+    if (!imageUrl) throw new Error("No image generated.");
     return imageUrl;
   } catch (error) {
-    console.error("Gemini API Error:", error);
+    console.error("Generation Error:", error);
     throw error;
   }
 };

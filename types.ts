@@ -5,18 +5,17 @@ export interface ImageData {
   id: string;
 }
 
-export interface RefinementOptions {
-  hideReindeerEars: boolean;
-  uprightAntlers: boolean;
-  lookAtCamera: boolean;
-  preservePhysiology: boolean;
-  removeDog: boolean;
-  addToyTrain: boolean;
-  snowyWindow: boolean;
+export interface DynamicVariable {
+  id: string;
+  label: string;
+  description: string;
+  isActive: boolean;
+  isAiGenerated: boolean;
 }
 
 export interface GenerationStatus {
   loading: boolean;
+  analyzing: boolean;
   error: string | null;
   resultUrl: string | null;
 }
