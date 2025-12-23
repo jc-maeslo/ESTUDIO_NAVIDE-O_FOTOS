@@ -1,35 +1,53 @@
 
 import { GoogleGenAI } from "@google/genai";
-import { ImageData } from "../types";
+import { ImageData, RefinementOptions } from "../types";
 
-export const generateChristmasPhoto = async (referenceImages: ImageData[]): Promise<string> => {
-  // Fix: Initialize GoogleGenAI using process.env.API_KEY directly as per guidelines
+export const generateChristmasPhoto = async (
+  referenceImages: ImageData[],
+  options: RefinementOptions
+): Promise<string> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
   
-  // Custom prompt based on user's specific requirements
+  // Build dynamic instructions based on professional variables
+  const directives: string[] = [];
+
+  if (options.preservePhysiology) {
+    directives.push("- CRITICAL: Maintain exact facial features and physiology of the children. Do not add, remove, or modify any facial characteristics.");
+  }
+
+  if (options.lookAtCamera) {
+    directives.push("- Subjects must be looking directly at the camera lens with natural, warm expressions.");
+  }
+
+  if (options.hideReindeerEars || options.uprightAntlers) {
+    let costumeText = "- COSTUME ADJUSTMENT: ";
+    if (options.hideReindeerEars) costumeText += "The floppy reindeer ears from the hood MUST NOT be visible. ";
+    if (options.uprightAntlers) costumeText += "The reindeer antlers/horns must be perfectly upright, rigid, and prominent.";
+    directives.push(costumeText);
+  }
+
+  if (options.removeDog) {
+    directives.push("- REMOVAL: Do not include the dog from the reference photos in the final composition.");
+  }
+
+  if (options.addToyTrain || options.snowyWindow) {
+    directives.push("- ENVIRONMENT: Set in a luxurious cozy living room with a white snowy Christmas tree.");
+    if (options.addToyTrain) directives.push("- Include a detailed vintage toy train set moving around the base of the tree.");
+    if (options.snowyWindow) directives.push("- Background features a large window with a view of a snowy pine forest at dusk.");
+  }
+
   const prompt = `
-    Generate a professional high-quality photography based on the provided reference images.
+    Generate a professional high-end studio photography based on the provided reference images.
     
-    CORE REQUIREMENTS:
-    - Preserve the identity and facial features of the two children (one toddler in a reindeer costume, one older child in a Santa outfit).
-    - Ensure both children are looking directly at the camera with natural, warm smiles and expressions.
-    - RECTIFY THE COSTUME: The reindeer hood's antlers/ears must be perfectly upright and firm, not floppy or folded down.
-    - REMOVE THE DOG: Do not include the white dog from the original photos in the new image.
+    TECHNICAL DIRECTIVES:
+    ${directives.join("\n    ")}
     
-    ENVIRONMENT & AESTHETICS:
-    - Set the scene in a cozy, luxurious Christmas living room.
-    - The Christmas tree must be snowy white, decorated with elegant silver and gold ornaments.
-    - At the base of the tree, include a classic detailed toy train set.
-    - Background: A large window revealing a deep green forest with soft, light snowflakes falling outside.
-    
-    TECHNICAL SPECS:
-    - Cinematic lighting, high HDR (High Dynamic Range), vibrant colors.
-    - Exceptional definition, sharp focus on the children, soft bokeh on the background forest.
-    - Perfect exposure and contrast, clear and bright atmosphere (not dark).
-    - Professional photography style, 8k resolution feel.
+    STYLE:
+    - High Dynamic Range (HDR), cinematic lighting, professional color grading.
+    - Sharp focus on the children (one in Santa outfit, one in Reindeer hood).
+    - 8k resolution, commercial photography quality.
   `;
 
-  // Fix: Construct parts array more cleanly to avoid 'as any' and ensure correct typing
   const imageParts = referenceImages.map(img => ({
     inlineData: {
       data: img.base64.split(',')[1],
@@ -54,8 +72,6 @@ export const generateChristmasPhoto = async (referenceImages: ImageData[]): Prom
     });
 
     let imageUrl = '';
-    
-    // Iterate through parts to find the image part
     const candidate = response.candidates?.[0];
     if (candidate?.content?.parts) {
       for (const part of candidate.content.parts) {
@@ -66,16 +82,10 @@ export const generateChristmasPhoto = async (referenceImages: ImageData[]): Prom
       }
     }
 
-    if (!imageUrl) {
-      throw new Error("No se pudo generar la imagen. Inténtalo de nuevo con descripciones más claras.");
-    }
-
+    if (!imageUrl) throw new Error("No se pudo generar la imagen.");
     return imageUrl;
   } catch (error) {
     console.error("Gemini API Error:", error);
-    if (error instanceof Error && error.message.includes("Requested entity was not found")) {
-      throw new Error("API Key mismatch or invalid model. Please check configuration.");
-    }
     throw error;
   }
 };
